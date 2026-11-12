@@ -14,7 +14,7 @@ Nodes talking over topics, services and actions are the skeleton of every ROS 2 
 
 ![Example node graph for the robot](images/node-graph.png)
 
-Solid arrows are topics, the dashed two-way arrow is a service, and the highlighted line is an action. The node and topic names are the examples used throughout this doc; `rqt_graph` draws the live version of this picture for your real system.
+Ovals are nodes (shaded ones run on the laptop), rectangles are topics, the diamond is a service and the hexagon is an action. Each block holds its interface type, and arrows show which way data flows. The node and topic names are the examples used throughout this doc; `rqt_graph` draws the live version of this picture for your real system. The touchscreen only talks to /walk: its Stop button cancels the walk goal, so the robot stands still instead of collapsing. A hard e-stop (torque off) comes from a physical power switch or a ros2 service call from the laptop, so it still works if the gait node has crashed. The gait node can also cut torque itself when it detects a fall.
 
 ### Nodes
 
@@ -22,7 +22,7 @@ Solid arrows are topics, the dashed two-way arrow is a service, and the highligh
 
 **Why:** You can write, test, restart and swap each job on its own. A crash in one node doesn't take down the robot.
 
-**Example:** `imu_node` reads the MPU-6050 over I²C. `servo_driver_node` talks to the Bus Linker over serial. `gait_node` generates walking motions, and `face_node` draws on the screen.
+**Example:** `imu_node` reads the MPU-6050 over I²C. `servo_driver_node` talks to the Bus Linker over serial. `gait_node` generates walking motions, and `screen_ui_node` runs the touchscreen: it draws the face and turns taps into /walk requests, like start and stop.
 
 ```bash
 ros2 run biped_hardware imu_node      # start a node: ros2 run <package> <executable>
@@ -206,7 +206,7 @@ Add the `source` line to `~/.bashrc` on the Pi so you don't forget it.
 
 **Why:** You don't want to open seven terminals every time you turn the robot on.
 
-**Example:** `robot.launch.py` starts the IMU, servo driver, robot_state_publisher, gait and face nodes, loading `gait_params.yaml`. A second `sim.launch.py` starts the simulated version instead.
+**Example:** `robot.launch.py` starts the IMU, servo driver, robot_state_publisher, gait and screen UI nodes, loading `gait_params.yaml`. A second `sim.launch.py` starts the simulated version instead.
 
 ```bash
 ros2 launch biped_bringup robot.launch.py
@@ -426,7 +426,7 @@ The main rule: **one node per shared bus or device.** What decides it is what's 
 - **It runs at a different rate.** IMU at 100 Hz, gait at 50 Hz, screen at about 10 Hz. Separate nodes let each run at its own pace.
 - **You'd want to swap or reuse it.** With the servo driver separate, you can replace it with a simulator or a bag replay and the gait node never knows.
 - **You want to restart or debug it alone.** Relaunch the gait node 50 times while tuning and leave the drivers running.
-- **A crash shouldn't take everything down.** If `face_node` crashes, the robot should keep standing.
+- **A crash shouldn't take everything down.** If `screen_ui_node` crashes, the robot should keep standing.
 
 **Keep it in one node when:**
 
@@ -461,7 +461,7 @@ One node per device *would* fit if each servo had its own connection, such as it
 | `servo_driver_node` | Sole owner of the serial bus; does all reads and writes |
 | `imu_node` | Different bus (I²C) and rate (100 Hz) |
 | `gait_node` | Your logic; swappable, restarted constantly while tuning. Holds balance too until that grows big enough to test alone |
-| `face_node` | Slow and non-critical; its crash shouldn't matter |
+| `screen_ui_node` | Owns the touchscreen (display + touch). Non-critical, so its crash shouldn't matter; it only sends /walk requests |
 | `robot_state_publisher` | Standard ROS node; no reason to rewrite it |
 
 If you later want separate nodes without separate processes, ROS 2 **component containers** run several nodes in one process.
