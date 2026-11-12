@@ -418,7 +418,7 @@ The sections above say what each piece is. This one covers how to decide between
 
 ### What becomes its own node
 
-The main rule: **one node owns each piece of hardware.** Inside that rule, split by rate, by swappability and by failure isolation.
+The main rule: **one node per shared bus or device.** What decides it is what's shared, not how many devices there are: six servos on one serial bus are one resource, so they get one node. Inside that rule, split by rate, by swappability and by failure isolation.
 
 **Make it a separate node when:**
 
@@ -443,6 +443,18 @@ Inside one node you can still organize the code into separate classes (for examp
 - **Both use the same state.** Calibration offsets, IDs, limits and torque status live in one place.
 
 From outside, the node still looks split: it subscribes to `/joint_commands`, publishes `/joint_states` and offers `/servos/set_torque`.
+
+**Why not one node per servo?** It looks more robust, but it isn't:
+
+- **Six nodes can't share one port.** They'd hit the same port-ownership and collision problems as splitting reads and writes, six times over. Taking turns would need a seventh node, which is just the servo driver again.
+- **A biped can't walk on 5 of 6 joints.** When a servo fails, the right response is to stop safely, not to keep the others running.
+- **Hardware faults usually hit several servos.** Each leg's 3 servos are daisy-chained, so a loose plug, power sag or shorted cable takes out the whole chain whatever the node layout.
+- **Separate processes guard against software crashes, not hardware faults.** Six copies of the same driver share the same bugs.
+- **Timing gets worse.** Six nodes on their own timers command the joints slightly out of step, adding jitter between legs that must move together.
+
+Put the robustness inside the one driver instead: give each servo read a short timeout so one silent servo doesn't stall the others, track each servo's health in `ServoStatus`, and go to a safe state (torque off, lifecycle Inactive) when one stops responding.
+
+One node per device *would* fit if each servo had its own connection, such as its own serial port or PWM pin with nothing shared.
 
 | Node | Why it's separate |
 | --- | --- |
