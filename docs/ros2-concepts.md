@@ -1,20 +1,23 @@
-# ROS 2 Concepts for the Bipedal Robot
+# ROS 2 Concepts for Digi-Runner
 
-Nov 12, 2026
+Nov 12, 2026 · Maximilian Shah
 
 These are the ROS 2 pieces a small bipedal robot actually uses. Each entry says what it is, why it matters, and how it would be used on this robot, plus the basic `ros2` CLI commands where the CLI is the simple way in.
 
-**Hardware assumed in the examples:** Raspberry Pi 4B, bus servos driven through the Bus Linker (serial), a GY-521 (MPU-6050) IMU on I²C, and the 5" DSI screen.
+**Hardware assumed in the examples:** Raspberry Pi 4B, bus servos driven through the Bus Linker (serial), a GY-521 (MPU-6050) IMU on I²C, and the 5" Touchscreen IPS LCD Display.
 
-**Commands assume** ROS 2 Jazzy (the LTS release for Ubuntu 24.04, which runs on the Pi 4). Most also work on Humble. Names in angle brackets or under `biped_*` are placeholders for your own packages and nodes. Before any command will find your code, source the workspace with `source ~/biped_ws/install/setup.bash`.
+**Commands assume** ROS 2 Jazzy (the LTS release for Ubuntu 24.04, which runs on the Pi 4). Most also work on Humble. Names in angle brackets or under `digirunner_*` are placeholders for your own packages and nodes. Before any command will find your code, source the workspace with `source ~/ros2_ws/install/setup.bash`.
 
 ## Core building blocks
 
 Nodes talking over topics, services and actions are the skeleton of every ROS 2 robot. Everything else in this doc builds on them.
 
-![Example node graph for the robot](images/node-graph.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/node-graph-dark.png">
+  <img alt="Example node graph for the robot" src="images/node-graph.png">
+</picture>
 
-Ovals are nodes (shaded ones run on the laptop), rectangles are topics, the diamond is a service and the hexagon is an action. Each block holds its interface type, and arrows show which way data flows. The node and topic names are the examples used throughout this doc; `rqt_graph` draws the live version of this picture for your real system. The touchscreen only talks to /walk: its Stop button cancels the walk goal, so the robot stands still instead of collapsing. A hard e-stop (torque off) comes from a physical power switch or a ros2 service call from the laptop, so it still works if the gait node has crashed. The gait node can also cut torque itself when it detects a fall.
+Ovals are nodes (shaded ones run on the laptop), rectangles are topics, the diamond is a service and the hexagon is an action. Each block holds its interface type, and arrows show which way data flows. The node and topic names are the examples used throughout this doc; `rqt_graph` draws the live version of this picture for your real system. The touchscreen only talks to /walk: its Stop button cancels the walk goal, so the robot stands still instead of collapsing. A hard e-stop (torque off) comes from a physical power switch or a ros2 service call from the laptop, so it still works if the gait node has crashed. The gait node can also cut torque itself when it detects a fall. The double oval is the controller slot: either classical_controller or policy_controller fills it (see Packages), and the rest of this doc calls whichever one is running gait_node.
 
 ### Nodes
 
@@ -25,7 +28,7 @@ Ovals are nodes (shaded ones run on the laptop), rectangles are topics, the diam
 **Example:** `imu_node` reads the MPU-6050 over I²C. `servo_driver_node` talks to the Bus Linker over serial. `gait_node` generates walking motions, and `screen_ui_node` runs the touchscreen: it draws the face and turns taps into /walk requests, like start and stop.
 
 ```bash
-ros2 run biped_hardware imu_node      # start a node: ros2 run <package> <executable>
+ros2 run digirunner_hardware imu_node      # start a node: ros2 run <package> <executable>
 ros2 node list                        # see every running node
 ros2 node info /imu_node              # its publishers, subscribers, services, actions
 ```
@@ -78,7 +81,7 @@ ros2 interface package std_srvs              # types in one package
 ros2 interface proto sensor_msgs/msg/JointState   # a fill-in-the-blanks template for ros2 topic pub
 ```
 
-Custom interfaces aren't made from the CLI. Put them in their own CMake package (`ros2 pkg create --build-type ament_cmake biped_interfaces`), add files like `msg/ServoStatus.msg`, and list them in `rosidl_generate_interfaces(...)` in that package's `CMakeLists.txt`.
+Custom interfaces aren't made from the CLI. Put them in their own CMake package (`ros2 pkg create --build-type ament_cmake --license MIT digirunner_interfaces`), add files like `msg/ServoStatus.msg`, and list them in `rosidl_generate_interfaces(...)` in that package's `CMakeLists.txt`.
 
 ### Services
 
@@ -105,11 +108,14 @@ ros2 service call /servos/set_torque std_srvs/srv/SetBool "{data: false}"   # go
 ```bash
 ros2 action list -t
 ros2 action info /walk                        # its server and clients
-ros2 action send_goal /walk biped_interfaces/action/Walk "{steps: 10}" --feedback
+ros2 action send_goal /walk digirunner_interfaces/action/Walk "{steps: 10}" --feedback
 # Ctrl+C while a goal is running cancels it
 ```
 
-![Topic vs service vs action message timing](images/topic-service-action.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/topic-service-action-dark.png">
+  <img alt="Topic vs service vs action message timing" src="images/topic-service-action.png">
+</picture>
 
 Time runs downward. A service caller waits for its one reply, while an action client keeps receiving feedback until the result arrives, and can cancel along the way.
 
@@ -126,8 +132,8 @@ ros2 param list /gait_node
 ros2 param get /gait_node step_height
 ros2 param set /gait_node step_height 0.02          # change it live
 ros2 param dump /gait_node > gait_params.yaml       # save the current values to a file
-ros2 run biped_control gait_node --ros-args --params-file gait_params.yaml
-ros2 run biped_control gait_node --ros-args -p step_height:=0.02   # set one at launch
+ros2 run digirunner_control gait_node --ros-args --params-file gait_params.yaml
+ros2 run digirunner_control gait_node --ros-args -p step_height:=0.02   # set one at launch
 ```
 
 ### Timers, callbacks and executors
@@ -165,36 +171,88 @@ Your code lives in packages inside a workspace, gets built with colcon, and runs
 
 **Why:** Packages keep the project modular and let the build system resolve dependencies.
 
-**Example:** A sensible split for this robot:
+**Example:** This robot uses seven packages, split by what depends on what rather than one per node. Topics, services and actions don't get packages; only the custom interface types do.
 
-- `biped_description`: URDF and meshes
-- `biped_hardware`: servo and IMU drivers
-- `biped_control`: gait and balance
-- `biped_interfaces`: custom messages, services and actions (must be a CMake package)
-- `biped_bringup`: launch files and parameter YAMLs
+```text
+ros2_ws/src/
+├── digirunner_interfaces/   (CMake)          Walk.action, ServoStatus.msg
+├── digirunner_description/  (CMake)          URDF, SolidWorks meshes, RViz config
+├── digirunner_hardware/     (C++)            imu_node, servo_driver_node
+├── digirunner_control/      (C++)            classical_controller
+├── digirunner_policy/       (C++ or Python)  policy_controller + exported .onnx model
+├── digirunner_ui/           (Python)         screen_ui_node
+└── digirunner_bringup/      (Python)         launch files, parameter YAMLs
+```
+
+| Package | Language | Holds | Why it's separate |
+| --- | --- | --- | --- |
+| `digirunner_interfaces` | CMake (no code) | `Walk.action`, `ServoStatus.msg` | Every other package depends on it; the build generates both C++ and Python versions of each type |
+| `digirunner_description` | CMake (no code) | URDF/xacro, meshes, RViz config | The robot, the simulator and the laptop all load it; only changes when the CAD changes |
+| `digirunner_hardware` | C++ | `imu_node`, `servo_driver_node` | Byte-level serial and I²C work, close to C; only runs on the Pi; steady timing matters most here |
+| `digirunner_control` | C++ | `classical_controller` | Your hand-designed control; C++ is the industry standard for real-time control |
+| `digirunner_policy` | C++ or Python | `policy_controller`, the trained `.onnx` model | Needs a neural-net runtime (ONNX Runtime) nothing else uses |
+| `digirunner_ui` | Python | `screen_ui_node` | Needs a GUI library (pygame) nothing else uses; GUI code gains nothing from C++ |
+| `digirunner_bringup` | Python | Launch files, parameter YAMLs | Ties everything together; tuning never touches node code |
+
+**One controller slot, two controllers.** `classical_controller` and `policy_controller` follow the same contract: `/imu/data` and `/joint_states` in, `/joint_commands` out. Only one runs at a time, chosen by a launch argument, and nothing else in the system changes. That lets you compare your own control design against the learned one on the same robot.
 
 ```bash
-cd ~/biped_ws/src
-ros2 pkg create --build-type ament_python --dependencies rclpy sensor_msgs \
-    --node-name imu_node biped_hardware        # new Python package with a starter node
-ros2 pkg list                                   # installed packages
-ros2 pkg executables biped_hardware             # runnable nodes in a package
-ros2 pkg prefix biped_hardware                  # where it's installed
+ros2 launch digirunner_bringup robot.launch.py controller:=classical
+ros2 launch digirunner_bringup robot.launch.py controller:=policy
 ```
+
+**Training lives outside the workspace.** The neural net is trained in Python (PyTorch) in a simulator such as MuJoCo, usually over millions of attempts, then exported to ONNX and copied into `digirunner_policy`. Accurate masses and inertias from the SolidWorks export make the simulated robot match the real one, so the policy transfers better.
+
+**Nodes you don't write.** `robot_state_publisher`, `rviz2` and the `ros2` CLI come with ROS (`sudo apt install ros-jazzy-robot-state-publisher`). List them as dependencies in `digirunner_bringup/package.xml`; they don't live in your workspace.
+
+**What goes where.** The Pi builds every package. The laptop only needs `digirunner_interfaces`, `digirunner_description` and `digirunner_bringup` (RViz needs the model, and the CLI needs the `Walk` type), plus the training code.
+
+**License.** Every package uses the **MIT** license: a `LICENSE` file at the repo root, and `<license>MIT</license>` in each `package.xml` (the `--license MIT` flag below fills that in). Using one license everywhere means there's never a question about what applies where.
+
+```bash
+cd ~/ros2_ws/src
+ros2 pkg create digirunner_interfaces --build-type ament_cmake --license MIT --dependencies std_msgs action_msgs
+ros2 pkg create digirunner_description --build-type ament_cmake --license MIT
+ros2 pkg create digirunner_hardware --build-type ament_cmake --license MIT --dependencies rclcpp rclcpp_lifecycle sensor_msgs std_msgs std_srvs digirunner_interfaces
+ros2 pkg create digirunner_control --build-type ament_cmake --license MIT --dependencies rclcpp rclcpp_action sensor_msgs std_msgs std_srvs digirunner_interfaces
+ros2 pkg create digirunner_policy --build-type ament_cmake --license MIT --dependencies rclcpp rclcpp_action sensor_msgs std_msgs std_srvs digirunner_interfaces
+ros2 pkg create digirunner_ui --build-type ament_python --license MIT --dependencies rclpy std_msgs digirunner_interfaces
+ros2 pkg create digirunner_bringup --build-type ament_python --license MIT --dependencies launch launch_ros robot_state_publisher xacro
+cd .. && colcon build --symlink-install       # builds digirunner_interfaces first automatically
+source install/setup.bash                      # makes the new packages visible in this terminal
+ros2 pkg list | grep digirunner                # check all seven are found
+ros2 pkg executables digirunner_hardware       # runnable nodes in a package (empty until you add nodes)
+```
+
+**Why these dependencies.** Each one is there because the package's nodes use something from it:
+
+| Dependency | Provides | Needed by |
+| --- | --- | --- |
+| `rclcpp` / `rclpy` | ROS client library for C++ / Python: nodes, publishers, subscribers, timers, parameters | Every package with nodes |
+| `rclcpp_action` | Action servers and clients in C++ (Python's `rclpy` includes them) | Both controllers, which serve `/walk` |
+| `rclcpp_lifecycle` | Lifecycle (managed) nodes in C++ | Hardware, if the servo driver is a lifecycle node; drop it otherwise |
+| `sensor_msgs` | `Imu`, `JointState` | Hardware (publishes both), controllers (subscribe to both) |
+| `std_msgs` | `Float64MultiArray` (`/joint_commands`), `String` (`/robot_mode`), `Header` | Hardware, controllers, UI, interfaces |
+| `std_srvs` | `SetBool` (`/servos/set_torque`) | Hardware (serves it), controllers (call it on a fall) |
+| `action_msgs` | Building blocks every action definition needs | Interfaces |
+| `digirunner_interfaces` | Your `Walk` action and `ServoStatus` message | Hardware, controllers, UI |
+| `launch`, `launch_ros`, `robot_state_publisher`, `xacro` | What the launch files start and use | Bringup |
+
+`digirunner_interfaces` also needs two lines added to its `package.xml` by hand, because `ros2 pkg create` can't add them: `<buildtool_depend>rosidl_default_generators</buildtool_depend>` and `<member_of_group>rosidl_interface_packages</member_of_group>`. `rviz2` is left out of bringup on purpose, so the Pi doesn't have to install it. `--dependencies` only pre-fills `package.xml` (and `CMakeLists.txt` for C++), so you can add more later by editing those files. Put the package name right after `create`: `--dependencies` takes every word after it as a dependency, so a name at the end gets swallowed and the command fails with "the following arguments are required: package_name".
 
 ### Workspace and colcon
 
-**What:** The workspace (`~/biped_ws/src/...`) holds your packages. `colcon build` compiles all of them, and sourcing `install/setup.bash` makes them available in your terminal.
+**What:** The workspace (`~/ros2_ws/src/...`) holds your packages. `colcon build` compiles all of them, and sourcing `install/setup.bash` makes them available in your terminal.
 
 **Why:** It's the standard build-and-run workflow.
 
 **Example:** After editing the gait node, rebuild only that package and relaunch.
 
 ```bash
-mkdir -p ~/biped_ws/src && cd ~/biped_ws
+mkdir -p ~/ros2_ws/src && cd ~/ros2_ws
 rosdep install --from-paths src --ignore-src -y     # install dependencies listed in package.xml files
 colcon build --symlink-install                      # build all (Python edits apply without rebuilding)
-colcon build --packages-select biped_control        # build one package
+colcon build --packages-select digirunner_control        # build one package
 source install/setup.bash                           # needed in every new terminal
 ```
 
@@ -209,9 +267,9 @@ Add the `source` line to `~/.bashrc` on the Pi so you don't forget it.
 **Example:** `robot.launch.py` starts the IMU, servo driver, robot_state_publisher, gait and screen UI nodes, loading `gait_params.yaml`. A second `sim.launch.py` starts the simulated version instead.
 
 ```bash
-ros2 launch biped_bringup robot.launch.py
-ros2 launch biped_bringup robot.launch.py --show-args     # list the arguments it accepts
-ros2 launch biped_bringup robot.launch.py use_sim:=true   # pass an argument
+ros2 launch digirunner_bringup robot.launch.py
+ros2 launch digirunner_bringup robot.launch.py --show-args     # list the arguments it accepts
+ros2 launch digirunner_bringup robot.launch.py use_sim:=true   # pass an argument
 ```
 
 Launch files themselves are written in a text editor and placed in the package's `launch/` folder (and installed through `setup.py` or `CMakeLists.txt`).
@@ -225,10 +283,10 @@ Launch files themselves are written in a text editor and placed in the package's
 **Example:** Run the same leg-controller node twice, once as `/left_leg` and once as `/right_leg`.
 
 ```bash
-ros2 run biped_control leg_controller --ros-args -r __ns:=/left_leg
-ros2 run biped_control leg_controller --ros-args -r __ns:=/right_leg
+ros2 run digirunner_control leg_controller --ros-args -r __ns:=/left_leg
+ros2 run digirunner_control leg_controller --ros-args -r __ns:=/right_leg
 # rename one topic, or the node itself
-ros2 run biped_hardware imu_node --ros-args -r imu/data:=/body/imu -r __node:=body_imu
+ros2 run digirunner_hardware imu_node --ros-args -r imu/data:=/body/imu -r __node:=body_imu
 ```
 
 ## Robot model and geometry
@@ -244,9 +302,9 @@ The URDF is the bridge from the SolidWorks assembly to ROS. Visualization, kinem
 **Example:** Export it from the SolidWorks assembly with the community `sw_urdf_exporter` add-in. It officially targets older SolidWorks versions, so check it with yours. It pulls masses and inertias from your material settings. Because the legs mirror each other, Xacro lets you define one leg and instantiate it for left and right. The passive ankle becomes a revolute joint with ±10° limits.
 
 ```bash
-xacro biped.urdf.xacro > biped.urdf        # expand xacro into plain URDF
-check_urdf biped.urdf                      # parse it and print the link tree (liburdfdom-tools)
-ros2 launch urdf_tutorial display.launch.py model:=$PWD/biped.urdf   # quick look in RViz with sliders
+xacro digirunner.urdf.xacro > digirunner.urdf        # expand xacro into plain URDF
+check_urdf digirunner.urdf                      # parse it and print the link tree (liburdfdom-tools)
+ros2 launch urdf_tutorial display.launch.py model:=$PWD/digirunner.urdf   # quick look in RViz with sliders
 ```
 
 ### TF2 (transforms)
@@ -257,7 +315,10 @@ ros2 launch urdf_tutorial display.launch.py model:=$PWD/biped.urdf   # quick loo
 
 **Example:** Look up `left_foot` relative to `base_link` to check the center of mass is over the support foot. The IMU's position in the floor tray gives the fixed `base_link` → `imu_link` transform.
 
-![TF frame tree from base_link down to each foot](images/tf-tree.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/tf-tree-dark.png">
+  <img alt="TF frame tree from base_link down to each foot" src="images/tf-tree.png">
+</picture>
 
 `tf2_echo base_link left_foot` walks this tree for you, combining every joint angle along the left leg into one transform.
 
@@ -281,7 +342,7 @@ The `imu_link` numbers above are placeholders. Measure them from the IMU pocket'
 
 ```bash
 ros2 run robot_state_publisher robot_state_publisher \
-    --ros-args -p robot_description:="$(xacro biped.urdf.xacro)"
+    --ros-args -p robot_description:="$(xacro digirunner.urdf.xacro)"
 ros2 run joint_state_publisher_gui joint_state_publisher_gui
 rviz2                                   # add RobotModel and TF displays, Fixed Frame = base_link
 ```
@@ -316,7 +377,10 @@ The simpler alternative: a Python `servo_driver_node` that subscribes to `/joint
 
 **Example:** The servo driver only enables torque once it's activated, after the IMU node reports it's ready. That keeps the robot from twitching on power-up.
 
-![Lifecycle states for the servo driver](images/lifecycle.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/lifecycle-dark.png">
+  <img alt="Lifecycle states for the servo driver" src="images/lifecycle.png">
+</picture>
 
 Each arrow is one `ros2 lifecycle set` command. Deactivating drops back to Inactive, so the robot goes limp without the node exiting.
 
@@ -358,7 +422,7 @@ ros2 bag play walk_test_01 --rate 0.25 --loop   # quarter speed, repeating
 
 ```bash
 rviz2                                    # set up displays, then File > Save Config
-rviz2 -d ~/biped_ws/src/biped_bringup/config/biped.rviz   # reopen a saved layout
+rviz2 -d ~/ros2_ws/src/digirunner_bringup/config/digirunner.rviz   # reopen a saved layout
 ```
 
 ### Gazebo (simulation)
@@ -371,7 +435,7 @@ rviz2 -d ~/biped_ws/src/biped_bringup/config/biped.rviz   # reopen a saved layou
 
 ```bash
 ros2 launch ros_gz_sim gz_sim.launch.py gz_args:=empty.sdf        # start an empty world
-ros2 run ros_gz_sim create -topic robot_description -name biped   # spawn the robot (needs robot_state_publisher running)
+ros2 run ros_gz_sim create -topic robot_description -name digirunner   # spawn the robot (needs robot_state_publisher running)
 ```
 
 Sensors and controllers inside Gazebo connect to ROS through `ros_gz_bridge` and `gz_ros2_control`. Those are set up in launch files rather than typed by hand.
@@ -481,7 +545,7 @@ If you later want separate nodes without separate processes, ROS 2 **component c
 ### Topic design
 
 - **Use a standard message type when one fits.** RViz, PlotJuggler and other people's code already understand `sensor_msgs/msg/Imu` and `sensor_msgs/msg/JointState`.
-- **Use SI units everywhere:** metres, radians, seconds. The HTD-35H speaks 0–1000 for 0–240°; convert at the servo driver and nowhere else, so the rest of the system only sees radians.
+- **Use SI units everywhere:** meters, radians, seconds. The HTD-35H speaks 0–1000 for 0–240°; convert at the servo driver and nowhere else, so the rest of the system only sees radians.
 - **Fill in the header.** Set `header.stamp` (when the data was measured) and `header.frame_id` (e.g. `imu_link`) so TF and bag replay can use it.
 - **One meaning per topic.** Don't send "walk speed" and "mode" on the same topic; give each its own.
 - **Write topic names without a leading slash in code** (`imu/data`, not `/imu/data`), so namespaces and remapping work. Use lowercase snake_case.
@@ -508,7 +572,7 @@ If a subscriber gets nothing from a topic that is clearly publishing, check QoS 
 
 - **Make it a parameter** if you'll tune it, or if it differs between the real robot and simulation: gains, step sizes, rates, servo offsets, serial port.
 - **Hard-code it** if it's a fact of physics or the protocol: packet headers, the servo's 0–1000 range.
-- **Keep parameter YAML files in `biped_bringup/config`** under version control, so you can see what changed between a good walk and a bad one.
+- **Keep parameter YAML files in `digirunner_bringup/config`** under version control, so you can see what changed between a good walk and a bad one.
 
 ### Frames and TF
 
@@ -526,14 +590,3 @@ If a subscriber gets nothing from a topic that is clearly publishing, check QoS 
 
 - **Record a bag on every hardware test** and name it by date or test number. Most bugs are found by replaying the failure, not by watching it live.
 - **Test new code with torque off, or the robot hanging in the air,** before letting it stand.
-
-## Suggested first milestone
-
-Get the model and one leg working end to end before writing any gait code.
-
-1. **Export the URDF from SolidWorks** and check it: `check_urdf biped.urdf`.
-2. **View it with sliders** and confirm every joint axis and limit: `ros2 launch urdf_tutorial display.launch.py model:=$PWD/biped.urdf`.
-3. **Write the servo driver node** and move one real leg by hand: `ros2 topic pub --once /joint_commands ...`.
-4. **Write the IMU node** and confirm its rate: `ros2 topic hz /imu/data`.
-5. **Put it all in one launch file**: `ros2 launch biped_bringup robot.launch.py`.
-6. **Bag-record a standing test** and replay it in RViz or PlotJuggler: `ros2 bag record -o stand_01 /imu/data /joint_states`.
