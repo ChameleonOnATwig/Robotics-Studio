@@ -1,0 +1,4 @@
+# Ignore the build, install, and log folders created by ROS2
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
