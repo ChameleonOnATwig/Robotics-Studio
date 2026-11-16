@@ -14,6 +14,18 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(digirunner_interfaces REQUIRED)
 
+# imu_node: GY-521 (MPU-6050) over I2C -> imu/data
+add_executable(imu_node src/imu_node.cpp src/mpu6050.cpp)
+target_include_directories(imu_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(imu_node PUBLIC cxx_std_17)
+target_link_libraries(imu_node
+  rclcpp::rclcpp
+  ${sensor_msgs_TARGETS}
+  ${std_srvs_TARGETS})
+
+install(TARGETS imu_node DESTINATION lib/${PROJECT_NAME})
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
