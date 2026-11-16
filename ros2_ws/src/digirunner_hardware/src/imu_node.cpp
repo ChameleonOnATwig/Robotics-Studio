@@ -63,7 +63,8 @@ public:
     imu_->configure(config);
     RCLCPP_INFO(
       get_logger(), "MPU-6050 on %s at 0x%02x: DLPF %d, +/-%d g, +/-%d deg/s",
-      device.c_str(), static_cast<int>(address), config.dlpf_cfg, config.accel_range_g, config.gyro_range_dps);
+      device.c_str(), static_cast<int>(address), config.dlpf_cfg,
+      config.accel_range_g, config.gyro_range_dps);
 
     publisher_ = create_publisher<sensor_msgs::msg::Imu>(
       "imu/data", rclcpp::SensorDataQoS().keep_last(1));
@@ -71,9 +72,9 @@ public:
     calibrate_service_ = create_service<std_srvs::srv::Trigger>(
       "imu/calibrate",
       [this](
-        std::shared_ptr<rclcpp::Service<std_srvs::srv::Trigger>> /*service*/,
+        std::shared_ptr<rclcpp::Service<std_srvs::srv::Trigger>>/*service*/,
         std::shared_ptr<rmw_request_id_t> header,
-        std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/) {
+        std::shared_ptr<std_srvs::srv::Trigger::Request>/*request*/) {
         pending_calibration_requests_.push_back(*header);
         start_calibration();
       });
