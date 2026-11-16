@@ -1,0 +1,43 @@
+# Parameters for classical_controller (digirunner_control). Loaded by robot.launch.py.
+#
+# All angles in radians. Joint order = servo IDs 1-6:
+#   left_hip_roll, left_hip_pitch, left_knee, right_hip_roll, right_hip_pitch, right_knee
+# Sign convention (REP 103: roll joints about +x, pitch joints about +y):
+#   hip pitch > 0 swings the leg BACKWARD, knee > 0 BENDS the knee,
+#   hip roll > 0 moves the foot LEFT (shifts the body right).
+# If a joint moves the wrong way on the robot, fix its direction in servos.yaml,
+# not here, so every node agrees on what positive means.
+classical_controller:
+  ros__parameters:
+    rate_hz: 50.0
+    joint_names: [left_hip_roll, left_hip_pitch, left_knee,
+                  right_hip_roll, right_hip_pitch, right_knee]
+
+    # Stand pose (zero pose = legs straight, from the servo calibration issue).
+    # A small knee bend usually stands better, e.g. hips -0.1 and knees 0.2.
+    stand_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    stand_up_time: 2.0          # s to ease from power-on pose to stand
+    return_to_stand_time: 1.0   # s to ease back after a walk ends or is cancelled
+
+    # Gait (open loop, same shape as code/walk.py). One step = one foot's swing.
+    cycle_time: 3.0             # s per full cycle (two steps); bigger = slower
+    hip_pitch_swing: 0.26       # rad (~15 deg) hip forward/back: step length
+    knee_lift: 0.35             # rad (~20 deg) extra knee bend mid-swing: step height
+    hip_roll_sway: 0.0          # rad side-to-side weight shift; try 0.05 once walking works
+    double_support: 0.3         # 0-0.9, how long both feet stay down around each change-over
+    ramp_cycles: 2.0            # cycles to ease in to full stride
+
+    # IMU balance: PD on the hips, added to both legs. Off until open-loop works.
+    balance_enabled: false
+    balance_target_pitch: 0.0   # rad; the pitch it stands best at
+    balance_pitch_gain: 0.5     # rad hip pitch per rad of pitch error
+    balance_pitch_damping: 0.02 # rad per rad/s of pitch rate
+    balance_roll_gain: 0.0
+    balance_roll_damping: 0.0
+    balance_max_correction: 0.14  # rad (~8 deg) cap per correction
+
+    # IMU and fall detection
+    imu_timeout: 0.1            # s without imu/data before it counts as missing
+    require_imu: true           # refuse /walk (and stop walking) without IMU data
+    fall_angle_deg: 30.0        # pitch or roll past this...
+    fall_time_ms: 100.0         # ...for this long = fall: abort walk, torque off

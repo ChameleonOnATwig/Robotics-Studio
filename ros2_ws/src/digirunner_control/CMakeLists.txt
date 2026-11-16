@@ -14,6 +14,21 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(digirunner_interfaces REQUIRED)
 
+# classical_controller: imu/data + joint_states -> joint_commands, serves /walk
+add_executable(classical_controller src/classical_controller.cpp)
+target_include_directories(classical_controller PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(classical_controller PUBLIC cxx_std_17)
+target_link_libraries(classical_controller
+  rclcpp::rclcpp
+  rclcpp_action::rclcpp_action
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${std_srvs_TARGETS}
+  ${digirunner_interfaces_TARGETS})
+
+install(TARGETS classical_controller DESTINATION lib/${PROJECT_NAME})
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
