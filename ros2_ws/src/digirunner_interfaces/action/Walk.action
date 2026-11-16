@@ -1,0 +1,12 @@
+# Walk a number of steps, then return to the stand pose.
+# One step is one foot's swing (half a gait cycle).
+
+# Goal
+int32 steps
+---
+# Result
+bool success          # true if every requested step was taken
+int32 steps_taken
+---
+# Feedback
+int32 current_step    # 1-based step that is in progress
