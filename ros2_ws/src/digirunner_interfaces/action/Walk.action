@@ -1,0 +1,9 @@
+# Goal
+int32 steps
+---
+# Result
+bool success
+int32 steps_taken
+---
+# Feedback
+int32 current_step
