@@ -181,7 +181,7 @@ ros2_ws/src/
 ├── digirunner_control/      (C++)            classical_controller
 ├── digirunner_policy/       (C++ or Python)  policy_controller + exported .onnx model
 ├── digirunner_ui/           (Python)         screen_ui_node
-└── digirunner_bringup/      (Python)         launch files, parameter YAMLs
+└── digirunner_bringup/      (CMake)          launch files, parameter YAMLs
 ```
 
 | Package | Language | Holds | Why it's separate |
@@ -192,7 +192,7 @@ ros2_ws/src/
 | `digirunner_control` | C++ | `classical_controller` | Your hand-designed control; C++ is the industry standard for real-time control |
 | `digirunner_policy` | C++ or Python | `policy_controller`, the trained `.onnx` model | Needs a neural-net runtime (ONNX Runtime) nothing else uses |
 | `digirunner_ui` | Python | `screen_ui_node` | Needs a GUI library (pygame) nothing else uses; GUI code gains nothing from C++ |
-| `digirunner_bringup` | Python | Launch files, parameter YAMLs | Ties everything together; tuning never touches node code |
+| `digirunner_bringup` | CMake (launch files still in Python) | Launch files, parameter YAMLs | Ties everything together; tuning never touches node code. CMake installs the launch and config folders with one line, and symlink builds pick up edits without rebuilding |
 
 **One controller slot, two controllers.** `classical_controller` and `policy_controller` follow the same contract: `/imu/data` and `/joint_states` in, `/joint_commands` out. Only one runs at a time, chosen by a launch argument, and nothing else in the system changes. That lets you compare your own control design against the learned one on the same robot.
 
@@ -217,7 +217,7 @@ ros2 pkg create digirunner_hardware --build-type ament_cmake --license MIT --dep
 ros2 pkg create digirunner_control --build-type ament_cmake --license MIT --dependencies rclcpp rclcpp_action sensor_msgs std_msgs std_srvs digirunner_interfaces
 ros2 pkg create digirunner_policy --build-type ament_cmake --license MIT --dependencies rclcpp rclcpp_action sensor_msgs std_msgs std_srvs digirunner_interfaces
 ros2 pkg create digirunner_ui --build-type ament_python --license MIT --dependencies rclpy std_msgs digirunner_interfaces
-ros2 pkg create digirunner_bringup --build-type ament_python --license MIT --dependencies launch launch_ros robot_state_publisher xacro
+ros2 pkg create digirunner_bringup --build-type ament_cmake --license MIT --dependencies launch launch_ros robot_state_publisher xacro
 cd .. && colcon build --symlink-install       # builds digirunner_interfaces first automatically
 source install/setup.bash                      # makes the new packages visible in this terminal
 ros2 pkg list | grep digirunner                # check all seven are found
@@ -238,7 +238,7 @@ ros2 pkg executables digirunner_hardware       # runnable nodes in a package (em
 | `digirunner_interfaces` | Your `Walk` action and `ServoStatus` message | Hardware, controllers, UI |
 | `launch`, `launch_ros`, `robot_state_publisher`, `xacro` | What the launch files start and use | Bringup |
 
-`digirunner_interfaces` also needs two lines added to its `package.xml` by hand, because `ros2 pkg create` can't add them: `<buildtool_depend>rosidl_default_generators</buildtool_depend>` and `<member_of_group>rosidl_interface_packages</member_of_group>`. `rviz2` is left out of bringup on purpose, so the Pi doesn't have to install it. `--dependencies` only pre-fills `package.xml` (and `CMakeLists.txt` for C++), so you can add more later by editing those files. Put the package name right after `create`: `--dependencies` takes every word after it as a dependency, so a name at the end gets swallowed and the command fails with "the following arguments are required: package_name".
+`digirunner_interfaces` also needs two lines added to its `package.xml` by hand, because `ros2 pkg create` can't add them: `<buildtool_depend>rosidl_default_generators</buildtool_depend>` and `<member_of_group>rosidl_interface_packages</member_of_group>`. `rviz2` is left out of bringup on purpose, so the Pi doesn't have to install it. `--dependencies` only pre-fills `package.xml` (and `CMakeLists.txt` for C++), so you can add more later by editing those files. Put the package name right after `create`: `--dependencies` takes every word after it as a dependency, so a name at the end gets swallowed and the command fails with "the following arguments are required: package_name". In `digirunner_bringup`'s `CMakeLists.txt`, add `install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})` above `ament_package()` once those folders have files in them, so `ros2 launch` can find the launch files and YAMLs.
 
 ### Workspace and colcon
 
