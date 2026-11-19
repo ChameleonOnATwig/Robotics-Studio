@@ -3,7 +3,7 @@
 <package format="3">
   <name>digirunner_hardware</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Digi-Runner Hardware Drivers: imu_node (MPU-6050 over I2C) and servo_driver_node (BusLinker serial bus).</description>
   <maintainer email="mas2660@columbia.edu">twig</maintainer>
   <license>MIT</license>
 
