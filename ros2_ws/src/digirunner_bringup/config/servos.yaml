@@ -1,0 +1,15 @@
+# servo_driver_node parameters (#6, #7). One column per joint, same order in every list.
+# Positions are raw servo units: 0-1000 = 0-240 deg. zero = reading in the standing pose
+# (becomes 0 rad in ROS); min/max = safe mechanical limits. Measured 2026-11-18.
+servo_driver_node:
+  ros__parameters:
+    port: /dev/ttyUSB0
+    baud: 115200
+    rate_hz: 50.0
+    joints:    [l_hip_yaw, l_hip_pitch, l_calf, r_hip_yaw, r_hip_pitch, r_calf]
+    ids:       [1,   2,   3,   4,   5,   6]
+    zero:      [588, 100, 704, 492, 83,  458]
+    direction: [1,   1,   1,   -1,  1,   1]   # r_hip_yaw -1 from its mirrored range: check by hand
+    min:       [525, 21,  175, 113, 21,  21]
+    max:       [895, 587, 979, 525, 591, 850]
+    min_vin_mv: 10500  # 3S pack low-battery warning (#8)
