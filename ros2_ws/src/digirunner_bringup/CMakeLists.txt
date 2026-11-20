@@ -5,12 +5,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# launch, launch_ros, robot_state_publisher and xacro are runtime-only (see package.xml)
 find_package(ament_cmake REQUIRED)
-find_package(launch REQUIRED)
-find_package(launch_ros REQUIRED)
-find_package(robot_state_publisher REQUIRED)
-find_package(xacro REQUIRED)
 
 # Install parameter files (e.g. config/imu.yaml) to share/digirunner_bringup/config
 install(DIRECTORY config
