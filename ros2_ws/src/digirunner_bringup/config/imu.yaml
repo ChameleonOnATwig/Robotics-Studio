@@ -1,0 +1,30 @@
+# Parameters for imu_node (digirunner_hardware). Until hardware.launch.py exists, pass it with:
+#   ros2 run digirunner_hardware imu_node --ros-args --params-file \
+#     <ws>/install/digirunner_bringup/share/digirunner_bringup/config/imu.yaml
+imu_node:
+  ros__parameters:
+    i2c_device: /dev/i2c-1      # the Pi's header I2C bus (pins 3 and 5)
+    address: 104                # 0x68; 105 (0x69) if the board's AD0 pin is tied to 3.3 V
+    rate_hz: 100.0
+    frame_id: imu_link
+
+    # How the board sits in the tray pocket: which printed board axis points
+    # FORWARD on the robot, and which points LEFT (x, -x, y, -y, z, -z).
+    # Check: tip the robot forward -> pitch goes positive; lean it right -> roll
+    # goes positive. If not, change these two.
+    forward_axis: x
+    left_axis: y
+
+    # Chip settings
+    dlpf_cfg: 3                 # digital low-pass filter: 3 = ~44 Hz (cuts servo vibration)
+    accel_range_g: 4            # 2, 4, 8 or 16; 4 leaves headroom for foot impacts
+    gyro_range_dps: 500         # 250, 500, 1000 or 2000
+    sample_rate_div: 4          # chip samples at 1 kHz / (1 + 4) = 200 Hz
+
+    # Complementary filter: how much to trust the gyro vs the accelerometer
+    filter_alpha: 0.98
+
+    # Gyro bias calibration (at startup and on the imu/calibrate service)
+    calibrate_on_start: true
+    calibration_samples: 200    # 2 s at 100 Hz; the robot must be still
+    calibration_max_stddev: 0.02  # rad/s; more spread than this means it moved
