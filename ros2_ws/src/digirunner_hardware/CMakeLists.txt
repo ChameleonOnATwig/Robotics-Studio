@@ -26,4 +26,13 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+# servo_driver_node: all six bus servos through the BusLinker (#7)
+add_executable(servo_driver_node src/servo_driver_node.cpp)
+target_include_directories(servo_driver_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_compile_features(servo_driver_node PUBLIC cxx_std_17)
+target_link_libraries(servo_driver_node
+  rclcpp::rclcpp ${sensor_msgs_TARGETS} ${std_msgs_TARGETS} ${std_srvs_TARGETS})
+install(TARGETS servo_driver_node DESTINATION lib/${PROJECT_NAME})
+
 ament_package()
